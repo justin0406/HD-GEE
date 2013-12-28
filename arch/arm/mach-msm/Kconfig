@@ -1639,6 +1639,12 @@ config CPU_UNDERCLOCK
 	help
 	  Krait underclocking
 
+config GPU_OVERCLOCK
+	bool "Enable GPU Overclocking option"
+	default n
+	help
+	  GPU OC to 487.5Mhz
+
 config USERSPACE_VOLTAGE_CONTROL
 	bool "Enable Userspace CPU Voltage Control"
 	default y
