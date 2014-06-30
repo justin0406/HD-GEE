@@ -995,6 +995,9 @@ retry:
 	if (have_bytes < min + reserved) {
 		ibytes = 0;
 	} else {
+		int entropy_count, orig;
+retry:
+		entropy_count = orig = ACCESS_ONCE(r->entropy_count);
 		/* If limited, never pull more than available */
 		if (r->limit && ibytes + reserved >= have_bytes)
 			ibytes = have_bytes - reserved;
@@ -1003,6 +1006,25 @@ retry:
 			entropy_count -= ibytes << (ENTROPY_SHIFT + 3);
 		else
 			entropy_count = reserved << (ENTROPY_SHIFT + 3);
+
+		if (r->limit && nbytes + reserved >= entropy_count / 8)
+			nbytes = entropy_count/8 - reserved;
+
+		if (entropy_count / 8 >= nbytes + reserved) {
+			entropy_count -= nbytes*8;
+			if (cmpxchg(&r->entropy_count, orig, entropy_count) != orig)
+				goto retry;
+		} else {
+			entropy_count = reserved;
+			if (cmpxchg(&r->entropy_count, orig, entropy_count) != orig)
+				goto retry;
+		}
+
+		if (entropy_count < random_write_wakeup_thresh) {
+			wake_up_interruptible(&random_write_wait);
+			kill_fasync(&fasync, SIGIO, POLL_OUT);
+		}
+	}
 
 		if (cmpxchg(&r->entropy_count, orig, entropy_count) != orig)
 			goto retry;

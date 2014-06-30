@@ -871,6 +871,7 @@ lookup_pi_state(u32 uval, struct futex_hash_bucket *hb,
 			if (pid != task_pid_vnr(pi_state->owner))
 				return -EINVAL;
 
+<<<<<<< HEAD
 			/*
 			 * Protect against a corrupted uval. If uval
 			 * is 0x80000000 then pid is 0 and the waiter
@@ -881,6 +882,8 @@ lookup_pi_state(u32 uval, struct futex_hash_bucket *hb,
 			if (task && pi_state->owner == task)
 				return -EDEADLK;
 
+=======
+>>>>>>> 3114294... Linux 3.4.75 -> 3.4.95
 		out_state:
 			atomic_inc(&pi_state->refcount);
 			*ps = pi_state;
@@ -1456,12 +1459,16 @@ void requeue_pi_wake_futex(struct futex_q *q, union futex_key *key,
 <<<<<<< HEAD
  * Returns:
  *  0 - failed to acquire the lock atomicly
+<<<<<<< HEAD
  *  1 - acquired the lock
 =======
  * Return:
  *  0 - failed to acquire the lock atomically;
  * >0 - acquired the lock, return value is vpid of the top_waiter
 >>>>>>> 866293e... futex: Add another early deadlock detection check
+=======
+ * >0 - acquired the lock, return value is vpid of the top_waiter
+>>>>>>> 3114294... Linux 3.4.75 -> 3.4.95
  * <0 - error
  */
 static int futex_proxy_trylock_atomic(u32 __user *pifutex,
@@ -1658,7 +1665,11 @@ retry_private:
 			 * rereading and handing potential crap to
 			 * lookup_pi_state.
 			 */
+<<<<<<< HEAD
 			ret = lookup_pi_state(ret, hb2, &key2, &pi_state, NULL);
+=======
+			ret = lookup_pi_state(ret, hb2, &key2, &pi_state);
+>>>>>>> 3114294... Linux 3.4.75 -> 3.4.95
 		}
 
 		switch (ret) {
