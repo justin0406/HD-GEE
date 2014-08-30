@@ -1168,6 +1168,7 @@ static struct attribute *interactive_attributes[] = {
 	&max_freq_hysteresis_attr.attr,
 	&align_windows_attr.attr,
 	&two_phase_freq_attr.attr,
+	&align_windows_attr.attr,
 	NULL,
 };
 
