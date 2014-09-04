@@ -290,8 +290,8 @@ static int input_get_disposition(struct input_dev *dev,
 				if (value == 1)
 					powerkey_pressed();
 				else if (value == 0)
-					powerkey_released();
-			}
+          				powerkey_released();
+        		}
 #endif
 			if (value != 2) {
 				__change_bit(code, dev->key);
@@ -1793,10 +1793,6 @@ void input_set_capability(struct input_dev *dev, unsigned int type, unsigned int
 		break;
 
 	case EV_ABS:
-		input_alloc_absinfo(dev);
-		if (!dev->absinfo)
-			return;
-
 		__set_bit(code, dev->absbit);
 		break;
 

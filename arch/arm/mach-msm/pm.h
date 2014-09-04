@@ -1,7 +1,7 @@
 /* arch/arm/mach-msm/pm.h
  *
  * Copyright (C) 2007 Google, Inc.
- * Copyright (c) 2009-2013, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2009-2012, The Linux Foundation. All rights reserved.
  * Author: San Mehat <san@android.com>
  *
  * This software is licensed under the terms of the GNU General Public
@@ -64,12 +64,6 @@ struct msm_pm_time_params {
 	uint32_t modified_time_us;
 };
 
-struct msm_pm_sleep_status_data {
-	void *base_addr;
-	uint32_t cpu_offset;
-	uint32_t mask;
-};
-
 struct msm_pm_platform_data {
 	u8 idle_supported;   /* Allow device to enter mode during idle */
 	u8 suspend_supported; /* Allow device to enter mode during suspend */
@@ -105,16 +99,13 @@ void msm_pm_set_irq_extns(struct msm_pm_irq_calls *irq_calls);
 int msm_pm_idle_enter(enum msm_pm_sleep_mode sleep_mode);
 void msm_pm_cpu_enter_lowpower(unsigned int cpu);
 void __init msm_pm_set_tz_retention_flag(unsigned int flag);
-void msm_pm_enable_retention(bool enable);
 
 #ifdef CONFIG_MSM_PM8X60
 void msm_pm_set_rpm_wakeup_irq(unsigned int irq);
 void msm_pm_set_sleep_ops(struct msm_pm_sleep_ops *ops);
-int msm_pm_wait_cpu_shutdown(unsigned int cpu);
 #else
 static inline void msm_pm_set_rpm_wakeup_irq(unsigned int irq) {}
 static inline void msm_pm_set_sleep_ops(struct msm_pm_sleep_ops *ops) {}
-static inline int msm_pm_wait_cpu_shutdown(unsigned int cpu) { return 0; }
 #endif
 #ifdef CONFIG_HOTPLUG_CPU
 int msm_platform_secondary_init(unsigned int cpu);

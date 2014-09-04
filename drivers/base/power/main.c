@@ -775,7 +775,7 @@ static void device_complete(struct device *dev, pm_message_t state)
 
 	device_unlock(dev);
 
-	pm_runtime_put(dev);
+	pm_runtime_put_sync(dev);
 }
 
 /**
@@ -1012,7 +1012,7 @@ int dpm_suspend_end(pm_message_t state)
 
 	error = dpm_suspend_noirq(state);
 	if (error) {
-		dpm_resume_early(resume_event(state));
+		dpm_resume_early(state);
 		return error;
 	}
 

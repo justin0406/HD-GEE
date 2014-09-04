@@ -29,8 +29,6 @@
 #include <linux/fault-inject.h>
 #include <linux/list_sort.h>
 #include <linux/delay.h>
-#include <linux/ratelimit.h>
-#include <linux/pm_runtime.h>
 
 #define CREATE_TRACE_POINTS
 #include <trace/events/block.h>
@@ -314,8 +312,7 @@ void __blk_run_queue(struct request_queue *q)
 	if (!q->notified_urgent &&
 		q->elevator->type->ops.elevator_is_urgent_fn &&
 		q->urgent_request_fn &&
-		q->elevator->type->ops.elevator_is_urgent_fn(q) &&
-		list_empty(&q->flush_data_in_flight)) {
+		q->elevator->type->ops.elevator_is_urgent_fn(q)) {
 		q->notified_urgent = true;
 		q->urgent_request_fn(q);
 	} else
@@ -503,7 +500,8 @@ struct request_queue *blk_alloc_queue_node(gfp_t gfp_mask, int node_id)
 	if (q->id < 0)
 		goto fail_q;
 
-	q->backing_dev_info.ra_pages = max_readahead_pages;
+	q->backing_dev_info.ra_pages =
+			(VM_MAX_READAHEAD * 1024) / PAGE_CACHE_SIZE;
 	q->backing_dev_info.state = 0;
 	q->backing_dev_info.capabilities = BDI_CAP_MAP_COPY;
 	q->backing_dev_info.name = "block";
@@ -514,7 +512,7 @@ struct request_queue *blk_alloc_queue_node(gfp_t gfp_mask, int node_id)
 		goto fail_id;
 
 	if (blk_throtl_init(q))
-		goto fail_bdi;
+		goto fail_id;
 
 	setup_timer(&q->backing_dev_info.laptop_mode_wb_timer,
 		    laptop_mode_timer_fn, (unsigned long) q);
@@ -539,8 +537,6 @@ struct request_queue *blk_alloc_queue_node(gfp_t gfp_mask, int node_id)
 
 	return q;
 
-fail_bdi:
-	bdi_destroy(&q->backing_dev_info);
 fail_id:
 	ida_simple_remove(&blk_queue_ida, q->id);
 fail_q:
@@ -618,7 +614,7 @@ blk_init_allocated_queue(struct request_queue *q, request_fn_proc *rfn,
 	q->request_fn		= rfn;
 	q->prep_rq_fn		= NULL;
 	q->unprep_rq_fn		= NULL;
-	q->queue_flags		|= QUEUE_FLAG_DEFAULT;
+	q->queue_flags		= QUEUE_FLAG_DEFAULT;
 
 	/* Override internal queue lock with supplied lock pointer */
 	if (lock)
@@ -1089,7 +1085,7 @@ void blk_requeue_request(struct request_queue *q, struct request *rq)
 		 * urgent requests. We want to be able to track this
 		 * down.
 		 */
-		pr_err("%s(): requeueing an URGENT request", __func__);
+		pr_debug("%s(): requeueing an URGENT request", __func__);
 		WARN_ON(!q->dispatched_urgent);
 		q->dispatched_urgent = false;
 	}
@@ -1126,7 +1122,7 @@ int blk_reinsert_request(struct request_queue *q, struct request *rq)
 		 * urgent requests. We want to be able to track this
 		 * down.
 		 */
-		pr_err("%s(): reinserting an URGENT request", __func__);
+		pr_debug("%s(): reinserting an URGENT request", __func__);
 		WARN_ON(!q->dispatched_urgent);
 		q->dispatched_urgent = false;
 	}
@@ -1198,16 +1194,6 @@ void part_round_stats(int cpu, struct hd_struct *part)
 }
 EXPORT_SYMBOL_GPL(part_round_stats);
 
-#ifdef CONFIG_PM_RUNTIME
-static void blk_pm_put_request(struct request *rq)
-{
-	if (rq->q->dev && !(rq->cmd_flags & REQ_PM) && !--rq->q->nr_pending)
-		pm_runtime_mark_last_busy(rq->q->dev);
-}
-#else
-static inline void blk_pm_put_request(struct request *rq) {}
-#endif
-
 /*
  * queue lock must be held
  */
@@ -1218,13 +1204,10 @@ void __blk_put_request(struct request_queue *q, struct request *req)
 	if (unlikely(--req->ref_count))
 		return;
 
-	blk_pm_put_request(req);
-
 	elv_completed_request(q, req);
 
-	/* this is a bio leak if the bio is not tagged with BIO_DONTFREE */
-	WARN_ON(req->bio && !bio_flagged(req->bio, BIO_DONTFREE));
-
+	/* this is a bio leak */
+	WARN_ON(req->bio != NULL);
 
 	/*
 	 * Request may not have originated from ll_rw_blk. if not,
@@ -1997,28 +1980,6 @@ static void blk_account_io_done(struct request *req)
 	}
 }
 
-#ifdef CONFIG_PM_RUNTIME
-/*
- * Don't process normal requests when queue is suspended
- * or in the process of suspending/resuming
- */
-static struct request *blk_pm_peek_request(struct request_queue *q,
-					   struct request *rq)
-{
-	if (q->dev && (q->rpm_status == RPM_SUSPENDED ||
-	    (q->rpm_status != RPM_ACTIVE && !(rq->cmd_flags & REQ_PM))))
-		return NULL;
-	else
-		return rq;
-}
-#else
-static inline struct request *blk_pm_peek_request(struct request_queue *q,
-						  struct request *rq)
-{
-	return rq;
-}
-#endif
-
 /**
  * blk_peek_request - peek at the top of a request queue
  * @q: request queue to peek at
@@ -2041,11 +2002,6 @@ struct request *blk_peek_request(struct request_queue *q)
 	int ret;
 
 	while ((rq = __elv_next_request(q)) != NULL) {
-
-		rq = blk_pm_peek_request(q, rq);
-		if (!rq)
-			break;
-
 		if (!(rq->cmd_flags & REQ_STARTED)) {
 			/*
 			 * This is the first time the device driver
@@ -2172,7 +2128,6 @@ void blk_start_request(struct request *req)
 	if (unlikely(blk_bidi_rq(req)))
 		req->next_rq->resid_len = blk_rq_bytes(req->next_rq);
 
-	BUG_ON(test_bit(REQ_ATOM_COMPLETE, &req->atomic_flags));
 	blk_add_timer(req);
 }
 EXPORT_SYMBOL(blk_start_request);
@@ -2233,7 +2188,7 @@ bool blk_update_request(struct request *req, int error, unsigned int nr_bytes)
 	if (!req->bio)
 		return false;
 
-	trace_block_rq_complete(req->q, req, nr_bytes);
+	trace_block_rq_complete(req->q, req);
 
 	/*
 	 * For fs requests, rq is just carrier of independent bio's
@@ -2265,25 +2220,14 @@ bool blk_update_request(struct request *req, int error, unsigned int nr_bytes)
 			error_type = "I/O";
 			break;
 		}
-		printk_ratelimited(
-			KERN_ERR "end_request: %s error, dev %s, sector %llu\n",
-			error_type,
-			req->rq_disk ? req->rq_disk->disk_name : "?",
-			(unsigned long long)blk_rq_pos(req));
+		printk(KERN_ERR "end_request: %s error, dev %s, sector %llu\n",
+		       error_type, req->rq_disk ? req->rq_disk->disk_name : "?",
+		       (unsigned long long)blk_rq_pos(req));
 	}
 
 	blk_account_io_completion(req, nr_bytes);
 
 	total_bytes = bio_nbytes = 0;
-
-	/*
-	 * Check for this if flagged, Req based dm needs to perform
-	 * post processing, hence dont end bios or request.DM
-	 * layer takes care.
-	 */
-	if (bio_flagged(req->bio, BIO_DONTFREE))
-		return false;
-
 	while ((bio = req->bio) != NULL) {
 		int nbytes;
 
@@ -3029,149 +2973,6 @@ void blk_finish_plug(struct blk_plug *plug)
 		current->plug = NULL;
 }
 EXPORT_SYMBOL(blk_finish_plug);
-
-#ifdef CONFIG_PM_RUNTIME
-/**
- * blk_pm_runtime_init - Block layer runtime PM initialization routine
- * @q: the queue of the device
- * @dev: the device the queue belongs to
- *
- * Description:
- *    Initialize runtime-PM-related fields for @q and start auto suspend for
- *    @dev. Drivers that want to take advantage of request-based runtime PM
- *    should call this function after @dev has been initialized, and its
- *    request queue @q has been allocated, and runtime PM for it can not happen
- *    yet(either due to disabled/forbidden or its usage_count > 0). In most
- *    cases, driver should call this function before any I/O has taken place.
- *
- *    This function takes care of setting up using auto suspend for the device,
- *    the autosuspend delay is set to -1 to make runtime suspend impossible
- *    until an updated value is either set by user or by driver. Drivers do
- *    not need to touch other autosuspend settings.
- *
- *    The block layer runtime PM is request based, so only works for drivers
- *    that use request as their IO unit instead of those directly use bio's.
- */
-void blk_pm_runtime_init(struct request_queue *q, struct device *dev)
-{
-	q->dev = dev;
-	q->rpm_status = RPM_ACTIVE;
-	pm_runtime_set_autosuspend_delay(q->dev, -1);
-	pm_runtime_use_autosuspend(q->dev);
-}
-EXPORT_SYMBOL(blk_pm_runtime_init);
-
-/**
- * blk_pre_runtime_suspend - Pre runtime suspend check
- * @q: the queue of the device
- *
- * Description:
- *    This function will check if runtime suspend is allowed for the device
- *    by examining if there are any requests pending in the queue. If there
- *    are requests pending, the device can not be runtime suspended; otherwise,
- *    the queue's status will be updated to SUSPENDING and the driver can
- *    proceed to suspend the device.
- *
- *    For the not allowed case, we mark last busy for the device so that
- *    runtime PM core will try to autosuspend it some time later.
- *
- *    This function should be called near the start of the device's
- *    runtime_suspend callback.
- *
- * Return:
- *    0		- OK to runtime suspend the device
- *    -EBUSY	- Device should not be runtime suspended
- */
-int blk_pre_runtime_suspend(struct request_queue *q)
-{
-	int ret = 0;
-
-	spin_lock_irq(q->queue_lock);
-	if (q->nr_pending) {
-		ret = -EBUSY;
-		pm_runtime_mark_last_busy(q->dev);
-	} else {
-		q->rpm_status = RPM_SUSPENDING;
-	}
-	spin_unlock_irq(q->queue_lock);
-	return ret;
-}
-EXPORT_SYMBOL(blk_pre_runtime_suspend);
-
-/**
- * blk_post_runtime_suspend - Post runtime suspend processing
- * @q: the queue of the device
- * @err: return value of the device's runtime_suspend function
- *
- * Description:
- *    Update the queue's runtime status according to the return value of the
- *    device's runtime suspend function and mark last busy for the device so
- *    that PM core will try to auto suspend the device at a later time.
- *
- *    This function should be called near the end of the device's
- *    runtime_suspend callback.
- */
-void blk_post_runtime_suspend(struct request_queue *q, int err)
-{
-	spin_lock_irq(q->queue_lock);
-	if (!err) {
-		q->rpm_status = RPM_SUSPENDED;
-	} else {
-		q->rpm_status = RPM_ACTIVE;
-		pm_runtime_mark_last_busy(q->dev);
-	}
-	spin_unlock_irq(q->queue_lock);
-}
-EXPORT_SYMBOL(blk_post_runtime_suspend);
-
-/**
- * blk_pre_runtime_resume - Pre runtime resume processing
- * @q: the queue of the device
- *
- * Description:
- *    Update the queue's runtime status to RESUMING in preparation for the
- *    runtime resume of the device.
- *
- *    This function should be called near the start of the device's
- *    runtime_resume callback.
- */
-void blk_pre_runtime_resume(struct request_queue *q)
-{
-	spin_lock_irq(q->queue_lock);
-	q->rpm_status = RPM_RESUMING;
-	spin_unlock_irq(q->queue_lock);
-}
-EXPORT_SYMBOL(blk_pre_runtime_resume);
-
-/**
- * blk_post_runtime_resume - Post runtime resume processing
- * @q: the queue of the device
- * @err: return value of the device's runtime_resume function
- *
- * Description:
- *    Update the queue's runtime status according to the return value of the
- *    device's runtime_resume function. If it is successfully resumed, process
- *    the requests that are queued into the device's queue when it is resuming
- *    and then mark last busy and initiate autosuspend for it.
- *
- *    This function should be called near the end of the device's
- *    runtime_resume callback.
- */
-void blk_post_runtime_resume(struct request_queue *q, int err)
-{
-	spin_lock_irq(q->queue_lock);
-	if (!err) {
-		q->rpm_status = RPM_ACTIVE;
-		__blk_run_queue(q);
-		pm_runtime_mark_last_busy(q->dev);
-		pm_runtime_autosuspend(q->dev);
-	} else {
-		q->rpm_status = RPM_SUSPENDED;
-	}
-	spin_unlock_irq(q->queue_lock);
-}
-EXPORT_SYMBOL(blk_post_runtime_resume);
-#endif
 
 int __init blk_dev_init(void)
 {

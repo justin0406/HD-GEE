@@ -36,14 +36,10 @@
 
 #include "acpuclock.h"
 
+#ifdef CONFIG_MSM_SLEEPER
 /* maxscroff */
-uint32_t maxscroff_freq = 1026000;
+uint32_t maxscroff_freq = 702000;
 uint32_t maxscroff = 1;
-
-#ifdef CONFIG_DEBUG_FS
-#include <linux/debugfs.h>
-#include <linux/seq_file.h>
-#include <asm/div64.h>
 #endif
 
 static DEFINE_MUTEX(l2bw_lock);
@@ -91,6 +87,24 @@ struct cpu_freq {
 
 static DEFINE_PER_CPU(struct cpu_freq, cpu_freq_info);
 
+#ifdef CONFIG_MSM_SLEEPER
+/**maxscroff**/
+static int __init cpufreq_read_arg_maxscroff(char *max_so)
+{
+	if (strcmp(max_so, "0") == 0) {
+		maxscroff = 0;
+	} else if (strcmp(max_so, "1") == 0) {
+		maxscroff = 1;
+	} else {
+		maxscroff = 0;
+	}
+	return 1;
+}
+
+__setup("max_so=", cpufreq_read_arg_maxscroff);
+/**end maxscroff**/
+#endif
+
 static void update_l2_bw(int *also_cpu)
 {
 	int rc = 0, cpu;
@@ -121,22 +135,6 @@ out:
 	mutex_unlock(&l2bw_lock);
 }
 
-/**maxscroff**/
-static int __init cpufreq_read_arg_maxscroff(char *max_so)
-{
-	if (strcmp(max_so, "0") == 0) {
-		maxscroff = 0;
-	} else if (strcmp(max_so, "1") == 0) {
-		maxscroff = 1;
-	} else {
-		maxscroff = 0;
-	}
-	return 1;
-}
-
-__setup("max_so=", cpufreq_read_arg_maxscroff);
-/**end maxscroff**/
-
 static int set_cpu_freq(struct cpufreq_policy *policy, unsigned int new_freq,
 			unsigned int index)
 {
@@ -147,10 +145,6 @@ static int set_cpu_freq(struct cpufreq_policy *policy, unsigned int new_freq,
 	struct cpu_freq *limit = &per_cpu(cpu_freq_info, policy->cpu);
 	struct sched_param param = { .sched_priority = MAX_RT_PRIO-1 };
 	struct cpufreq_frequency_table *table;
-
-#ifdef CONFIG_TURBO_BOOST
-	new_freq = msm_turbo(new_freq);
-#endif
 
 	if (limit->limits_init) {
 		if (new_freq > limit->allowed_max) {
@@ -348,7 +342,7 @@ int msm_cpufreq_set_freq_limits(uint32_t cpu, uint32_t min, uint32_t max)
 }
 EXPORT_SYMBOL(msm_cpufreq_set_freq_limits);
 
-static int __cpuinit msm_cpufreq_init(struct cpufreq_policy *policy)
+static int msm_cpufreq_init(struct cpufreq_policy *policy)
 {
 	int cur_freq;
 	int index;
@@ -404,6 +398,9 @@ static int __cpuinit msm_cpufreq_init(struct cpufreq_policy *policy)
 
 	policy->cpuinfo.transition_latency =
 		acpuclk_get_switch_time() * NSEC_PER_USEC;
+	/* set safe default min and max speeds */
+	policy->max = CONFIG_MSM_CPU_FREQ_MAX;
+	policy->min = CONFIG_MSM_CPU_FREQ_MIN;
 
 	cpu_work = &per_cpu(cpufreq_work, policy->cpu);
 	INIT_WORK(&cpu_work->work, set_cpu_work);
@@ -412,7 +409,7 @@ static int __cpuinit msm_cpufreq_init(struct cpufreq_policy *policy)
 	return 0;
 }
 
-static int __cpuinit msm_cpufreq_cpu_callback(struct notifier_block *nfb,
+static int msm_cpufreq_cpu_callback(struct notifier_block *nfb,
 		unsigned long action, void *hcpu)
 {
 	unsigned int cpu = (unsigned long)hcpu;
@@ -460,43 +457,6 @@ static struct notifier_block __refdata msm_cpufreq_cpu_notifier = {
 	.notifier_call = msm_cpufreq_cpu_callback,
 };
 
-#ifdef CONFIG_CPU_FREQ_GOV_INTELLIDEMAND
-extern bool lmf_screen_state;
-#endif
-
-static void msm_cpu_early_suspend(struct early_suspend *h)
-{
-#ifdef CONFIG_CPUFREQ_LIMIT_MAX_FREQ
-	int cpu = 0;
-
-	for_each_possible_cpu(cpu) {
-		mutex_lock(&per_cpu(cpufreq_suspend, cpu).suspend_mutex);
-		lmf_screen_state = false;		
-		mutex_unlock(&per_cpu(cpufreq_suspend, cpu).suspend_mutex);
-	}
-#endif
-}
-
-static void msm_cpu_late_resume(struct early_suspend *h)
-{
-#ifdef CONFIG_CPUFREQ_LIMIT_MAX_FREQ
-	int cpu = 0;
-
-	for_each_possible_cpu(cpu) {
-
-		mutex_lock(&per_cpu(cpufreq_suspend, cpu).suspend_mutex);
-		lmf_screen_state = true;
-		mutex_unlock(&per_cpu(cpufreq_suspend, cpu).suspend_mutex);
-	}
-#endif
-}
-
-static struct early_suspend msm_cpu_early_suspend_handler = {
-	.level = EARLY_SUSPEND_LEVEL_BLANK_SCREEN,
-	.suspend = msm_cpu_early_suspend,
-	.resume = msm_cpu_late_resume,
-};
-
 /*
  * Define suspend/resume for cpufreq_driver. Kernel will call
  * these during suspend/resume with interrupts disabled. This
@@ -525,6 +485,7 @@ static int msm_cpufreq_resume(struct cpufreq_policy *policy)
 	return 0;
 }
 
+#ifdef CONFIG_MSM_SLEEPER
 /** maxscreen off sysfs interface **/
 
 static ssize_t show_max_screen_off_khz(struct cpufreq_policy *policy, char *buf)
@@ -595,12 +556,14 @@ struct freq_attr msm_cpufreq_attr_max_screen_off = {
 };
 
 /** end maxscreen off sysfs interface **/
+#endif
 
 static struct freq_attr *msm_freq_attr[] = {
 	&cpufreq_freq_attr_scaling_available_freqs,
-/** maxscreen off sysfs interface **/
+#ifdef CONFIG_MSM_SLEEPER
 	&msm_cpufreq_attr_max_screen_off_khz,
 	&msm_cpufreq_attr_max_screen_off,
+#endif
 	NULL,
 };
 
@@ -749,49 +712,6 @@ static int cpufreq_parse_dt(struct device *dev)
 	return 0;
 }
 
-#ifdef CONFIG_DEBUG_FS
-static int msm_cpufreq_show(struct seq_file *m, void *unused)
-{
-	unsigned int i, cpu_freq;
-	uint64_t ib;
-
-	if (!freq_table)
-		return 0;
-
-	seq_printf(m, "%10s%10s", "CPU (KHz)", "L2 (KHz)");
-	if (bus_bw.usecase)
-		seq_printf(m, "%12s", "Mem (MBps)");
-	seq_printf(m, "\n");
-
-	for (i = 0; freq_table[i].frequency != CPUFREQ_TABLE_END; i++) {
-		cpu_freq = freq_table[i].frequency;
-		if (cpu_freq == CPUFREQ_ENTRY_INVALID)
-			continue;
-		seq_printf(m, "%10d", cpu_freq);
-		seq_printf(m, "%10d", l2_khz ? l2_khz[i] : cpu_freq);
-		if (bus_bw.usecase) {
-			ib = bus_bw.usecase[i].vectors[0].ib;
-			do_div(ib, 1000000);
-			seq_printf(m, "%12llu", ib);
-		}
-		seq_printf(m, "\n");
-	}
-	return 0;
-}
-
-static int msm_cpufreq_open(struct inode *inode, struct file *file)
-{
-	return single_open(file, msm_cpufreq_show, inode->i_private);
-}
-
-const struct file_operations msm_cpufreq_fops = {
-	.open		= msm_cpufreq_open,
-	.read		= seq_read,
-	.llseek		= seq_lseek,
-	.release	= seq_release,
-};
-#endif
-
 static int __init msm_cpufreq_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
@@ -830,13 +750,6 @@ static int __init msm_cpufreq_probe(struct platform_device *pdev)
 	}
 
 	is_clk = true;
-
-#ifdef CONFIG_DEBUG_FS
-	if (!debugfs_create_file("msm_cpufreq", S_IRUGO, NULL, NULL,
-		&msm_cpufreq_fops))
-		return -ENOMEM;
-#endif
-
 	return 0;
 }
 
@@ -865,8 +778,7 @@ static int __init msm_cpufreq_register(void)
 	platform_driver_probe(&msm_cpufreq_plat_driver, msm_cpufreq_probe);
 	msm_cpufreq_wq = alloc_workqueue("msm-cpufreq", WQ_HIGHPRI, 0);
 	register_hotcpu_notifier(&msm_cpufreq_cpu_notifier);
-	register_early_suspend(&msm_cpu_early_suspend_handler);
 	return cpufreq_register_driver(&msm_cpufreq_driver);
 }
 
-device_initcall(msm_cpufreq_register);
+late_initcall(msm_cpufreq_register);

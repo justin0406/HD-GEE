@@ -25,13 +25,7 @@ MISC = misc.o
 
 AFLAGS_decompress.o += -Wa,-march=armv7-a$(plus_sec)
 DECOMPRESS = decompress.o
-<<<<<<< HEAD
-ifeq ($(CONFIG_KERNEL_LZ4),y)
-CFLAGS_decompress.o := -Os
-endif
-=======
 
->>>>>>> 43ceec1... Linaro 4.8 fixes
 FONTC	= $(srctree)/drivers/video/console/font_acorn_8x8.c
 
 #AFLAGS_head.o += -DTEXT_OFFSET=$(TEXT_OFFSET)
@@ -106,7 +100,6 @@ suffix_$(CONFIG_KERNEL_GZIP) = gzip
 suffix_$(CONFIG_KERNEL_LZO)  = lzo
 suffix_$(CONFIG_KERNEL_LZMA) = lzma
 suffix_$(CONFIG_KERNEL_XZ)   = xzkern
-suffix_$(CONFIG_KERNEL_LZ4)  = lz4
 
 # Borrowed libfdt files for the ATAG compatibility mode
 
@@ -130,13 +123,7 @@ targets       := vmlinux vmlinux.lds \
 		 lib1funcs.o lib1funcs.S font.o font.c head.o misc.o decompress.o $(OBJS)
 
 # Make sure files are removed during clean
-<<<<<<< HEAD
-extra-y       += piggy.gzip piggy.lzo piggy.lzma piggy.xzkern piggy.lz4 \
-		 lib1funcs.S ashldi3.S $(libfdt) $(libfdt_hdrs) \
-		 hyp-stub.S
-=======
 extra-y       += piggy.gzip piggy.lzo piggy.lzma  piggy.xzkern  lib1funcs.S $(libfdt) $(libfdt_hdrs)
->>>>>>> 43ceec1... Linaro 4.8 fixes
 
 ifeq ($(CONFIG_FUNCTION_TRACER),y)
 ORIG_CFLAGS := $(KBUILD_CFLAGS)
@@ -144,7 +131,7 @@ KBUILD_CFLAGS = $(subst -pg, , $(ORIG_CFLAGS))
 endif
 
 ccflags-y := -fpic -fno-builtin -I$(obj)
-asflags-y := -Wa,-march=all
+asflags-y := -Wa,-march=armv7-a
 
 # Supply kernel BSS size to the decompressor via a linker symbol.
 SIZEBIN := $(if $(shell which $(CROSS_COMPILE)size),$(CROSS_COMPILE)size,size)

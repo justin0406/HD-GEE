@@ -334,7 +334,7 @@ int mdp4_overlay_iommu_map_buf(int mem_id,
 		pipe->pipe_ndx, plane);
 	if (ion_map_iommu(display_iclient, *srcp_ihdl,
 		DISPLAY_READ_DOMAIN, GEN_POOL, SZ_4K, 0, start,
-		len, 0, ION_IOMMU_UNMAP_DELAYED)) {
+		len, 0, 0)) {
 		ion_free(display_iclient, *srcp_ihdl);
 		pr_err("ion_map_iommu() failed\n");
 		return -EINVAL;
@@ -3321,14 +3321,12 @@ int mdp4_overlay_set(struct fb_info *info, struct mdp_overlay *req)
 
 	mixer = mfd->panel_info.pdest;	/* DISPLAY_1 or DISPLAY_2 */
 
-	if (!perf_current.use_ov_blt[mixer]) {
-		ret = mdp4_calc_req_blt(mfd, req);
-		if (ret < 0) {
-			mutex_unlock(&mfd->dma->ov_mutex);
-			pr_err("%s: blt mode is required! ret=%d\n",
-				__func__, ret);
-			return ret;
-		}
+	ret = mdp4_calc_req_blt(mfd, req);
+
+	if (ret < 0) {
+		mutex_unlock(&mfd->dma->ov_mutex);
+		pr_err("%s: blt mode is required! ret=%d\n", __func__, ret);
+		return ret;
 	}
 
 	ret = mdp4_overlay_req2pipe(req, mixer, &pipe, mfd);

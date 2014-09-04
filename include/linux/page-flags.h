@@ -110,15 +110,7 @@ enum pageflags {
 	PG_compound_lock,
 #endif
 	PG_readahead,		/* page in a readahead window */
-#ifdef CONFIG_KSM_CHECK_PAGE
-	PG_ksm_scan0,		/* page has been scanned by even KSM cycle */
-#endif
 	__NR_PAGEFLAGS,
-
-#ifdef CONFIG_KSM_CHECK_PAGE
-	/* page has been scanned by odd KSM cycle */
-	PG_ksm_scan1 = PG_owner_priv_1,
-#endif
 
 	/* Filesystems */
 	PG_checked = PG_owner_priv_1,
@@ -219,10 +211,6 @@ PAGEFLAG(Reserved, reserved) __CLEARPAGEFLAG(Reserved, reserved)
 PAGEFLAG(SwapBacked, swapbacked) __CLEARPAGEFLAG(SwapBacked, swapbacked)
 
 __PAGEFLAG(SlobFree, slob_free)
-#ifdef CONFIG_KSM_CHECK_PAGE
-CLEARPAGEFLAG(KsmScan0, ksm_scan0) TESTSETFLAG(KsmScan0, ksm_scan0)
-CLEARPAGEFLAG(KsmScan1, ksm_scan1) TESTSETFLAG(KsmScan1, ksm_scan1)
-#endif
 
 /*
  * Private page markings that may be used by the filesystem that owns the page
@@ -375,7 +363,7 @@ static inline void ClearPageCompound(struct page *page)
  * pages on the LRU and/or pagecache.
  */
 TESTPAGEFLAG(Compound, compound)
-__SETPAGEFLAG(Head, compound)  __CLEARPAGEFLAG(Head, compound)
+__PAGEFLAG(Head, compound)
 
 /*
  * PG_reclaim is used in combination with PG_compound to mark the
@@ -387,13 +375,7 @@ __SETPAGEFLAG(Head, compound)  __CLEARPAGEFLAG(Head, compound)
  * PG_compound & PG_reclaim	=> Tail page
  * PG_compound & ~PG_reclaim	=> Head page
  */
-#define PG_head_mask ((1L << PG_compound))
 #define PG_head_tail_mask ((1L << PG_compound) | (1L << PG_reclaim))
-
-static inline int PageHead(struct page *page)
-{
-	return ((page->flags & PG_head_tail_mask) == PG_head_mask);
-}
 
 static inline int PageTail(struct page *page)
 {

@@ -53,7 +53,7 @@ static void touchwake_disable_touch(void)
 	pr_info("%s: disable touch controls\n", __func__);
 	touchscreen_disable();
 	touch_disabled = true;
-
+    
 	return;
 }
 
@@ -62,7 +62,7 @@ static void touchwake_enable_touch(void)
 	pr_info("%s: enable touch controls\n", __func__);
 	touchscreen_enable();
 	touch_disabled = false;
-
+    
 	return;
 }
 
@@ -74,59 +74,40 @@ EXPORT_SYMBOL(touchwake_is_enabled);
 
 static void touchwake_early_suspend(struct early_suspend *h)
 {
-	if (!touchwake_enabled) {
-		touch_disabled = true;
+	if (!touchwake_enabled)
 		goto out;
-	}
-
+    
 	if (timed_out) {
 		wake_lock(&touchwake_wake_lock);
 		led_trigger_event(&touchwake_led_trigger, LED_FULL);
 		schedule_delayed_work(&touchoff_work,
-					msecs_to_jiffies(touchoff_delay));
-	} else {
+                              msecs_to_jiffies(touchoff_delay));
+	} else
 		touchwake_disable_touch();
-	}
+    
 out:
 	device_suspended = true;
 }
 
 static void touchwake_late_resume(struct early_suspend *h)
 {
-	if (!touchwake_enabled) {
-		touch_disabled = false;
+	if (!touchwake_enabled)
 		goto out;
-	}
-
-	cancel_delayed_work_sync(&touchoff_work);
-
+    
+	cancel_delayed_work(&touchoff_work);
+	flush_scheduled_work();
+    
 	wake_unlock(&touchwake_wake_lock);
-
+    
 	if (touch_disabled)
 		touchwake_enable_touch();
-
+    
 	led_trigger_event(&touchwake_led_trigger, LED_OFF);
 	timed_out = true;
-
+    
 out:
 	device_suspended = false;
 }
-
-static void disable_touchwake(void)
-{
-	if (!touchwake_enabled)
-		return;
-
-	cancel_delayed_work_sync(&touchoff_work);
-
-	if (wake_lock_active(&touchwake_wake_lock)) {
-		touchwake_disable_touch();
-		wake_unlock(&touchwake_wake_lock);
-		led_trigger_event(&touchwake_led_trigger, LED_OFF);
-	}
-
-	touchwake_enabled = false;
-};
 
 static struct early_suspend touchwake_suspend_data = {
 	.level = EARLY_SUSPEND_LEVEL_BLANK_SCREEN,
@@ -139,111 +120,111 @@ static void touchwake_touchoff(struct work_struct *touchoff_work)
 	touchwake_disable_touch();
 	wake_unlock(&touchwake_wake_lock);
 	led_trigger_event(&touchwake_led_trigger, LED_OFF);
-
+    
 	return;
 }
 
 static void press_powerkey(struct work_struct *ws)
 {
 	unsigned long delay;
-
+    
 	if (powerkey_flag == 0) {
 		pr_debug("%s: power key down\n", __func__);
-
+        
 		input_report_key(powerkey_device, KEY_POWER, 1);
 		input_sync(powerkey_device);
-
+        
 		powerkey_flag = 1;
-
+        
 		delay = msecs_to_jiffies(POWERPRESS_DELAY);
 		schedule_delayed_work(&presspower_work, delay);
 	} else if (powerkey_flag == 1) {
 		pr_debug("%s: power key up\n", __func__);
-
+        
 		input_report_key(powerkey_device, KEY_POWER, 0);
 		input_sync(powerkey_device);
-
+        
 		powerkey_flag = 2;
-
+        
 		delay = msecs_to_jiffies(POWERPRESS_DELAY);
 		schedule_delayed_work(&presspower_work, delay);
 	} else if (powerkey_flag == 2) {
 		pr_debug("%s: delay\n", __func__);
-
+        
 		powerkey_flag = 3;
-
+        
 		delay = msecs_to_jiffies(POWERPRESS_TIMEOUT);
 		schedule_delayed_work(&presspower_work, delay);
 	} else if (powerkey_flag == 3) {
 		pr_debug("%s: release mutex\n", __func__);
-
+        
 		powerkey_flag = 0;
-
+        
 		mutex_unlock(&lock);
 	}
 }
 
 static ssize_t touchwake_status_read(struct device *dev,
-				struct device_attribute *attr, char *buf)
+                                     struct device_attribute *attr, char *buf)
 {
 	return snprintf(buf, PAGE_SIZE, "%u\n", (touchwake_enabled ? 1 : 0));
 }
 
 static ssize_t touchwake_status_write(struct device *dev,
-		struct device_attribute *attr, const char *buf, size_t size)
+                                      struct device_attribute *attr, const char *buf, size_t size)
 {
 	unsigned int data;
 	int ret;
-
+    
 	ret = sscanf(buf, "%u\n", &data);
-
+    
 	if (ret != 1 || data < 0) {
 		pr_info("%s: invalid input\n", __func__);
 		return -EINVAL;
 	}
-
+    
 	pr_debug("%s: %u\n", __func__, data);
-
+    
 	if (data == 1) {
 		pr_info("%s: TOUCHWAKE function enabled\n", __func__);
 		touchwake_enabled = true;
 	} else if (data == 0) {
 		pr_info("%s: TOUCHWAKE function disabled\n", __func__);
-		disable_touchwake();
+		touchwake_enabled = false;
 	}
-
+    
 	return size;
 }
 
 static ssize_t touchwake_delay_read(struct device *dev,
-				struct device_attribute *attr, char *buf)
+                                    struct device_attribute *attr, char *buf)
 {
 	return snprintf(buf, PAGE_SIZE, "%u\n", touchoff_delay);
 }
 
 static ssize_t touchwake_delay_write(struct device *dev,
-		struct device_attribute *attr, const char *buf, size_t size)
+                                     struct device_attribute *attr, const char *buf, size_t size)
 {
 	unsigned int data;
 	int ret;
-
+    
 	ret = sscanf(buf, "%u\n", &data);
-
+    
 	if (ret != 1 || data < 1) {
 		pr_info("%s: invalid input\n", __func__);
 		return -EINVAL;
 	}
-
+    
 	touchoff_delay = data;
 	pr_info("TOUCHWAKE delay set to %u\n", touchoff_delay);
-
+    
 	return size;
 }
 
 static DEVICE_ATTR(enabled, S_IRUGO | S_IWUGO, touchwake_status_read,
-						touchwake_status_write);
+                   touchwake_status_write);
 static DEVICE_ATTR(delay, S_IRUGO | S_IWUGO, touchwake_delay_read,
-						touchwake_delay_write);
+                   touchwake_delay_write);
 
 static struct attribute *touchwake_notification_attributes[] = {
 	&dev_attr_enabled.attr,
@@ -263,7 +244,7 @@ static struct miscdevice touchwake_device = {
 void powerkey_pressed(void)
 {
 	do_gettimeofday(&last_powerkeypress);
-
+    
 	return;
 }
 EXPORT_SYMBOL(powerkey_pressed);
@@ -272,17 +253,17 @@ void powerkey_released(void)
 {
 	struct timeval now;
 	int time_pressed;
-
+    
 	do_gettimeofday(&now);
-
+    
 	time_pressed = (now.tv_sec - last_powerkeypress.tv_sec) * MSEC_PER_SEC +
-		(now.tv_usec - last_powerkeypress.tv_usec) / USEC_PER_MSEC;
-
+    (now.tv_usec - last_powerkeypress.tv_usec) / USEC_PER_MSEC;
+    
 	if (time_pressed > POWERPRESS_DELAY && time_pressed < TIME_LONGPRESS) {
 		timed_out = false;
 		pr_debug("%s: timed_out false: %d", __func__, time_pressed);
 	}
-
+    
 	return;
 }
 EXPORT_SYMBOL(powerkey_released);
@@ -290,11 +271,11 @@ EXPORT_SYMBOL(powerkey_released);
 void touch_press(void)
 {
 	unsigned long delay = 10;
-
+    
 	pr_debug("%s: touch pressed\n", __func__);
 	if (touchwake_enabled && device_suspended && mutex_trylock(&lock))
 		schedule_delayed_work(&presspower_work, delay);
-
+    
 	return;
 }
 EXPORT_SYMBOL(touch_press);
@@ -302,7 +283,7 @@ EXPORT_SYMBOL(touch_press);
 void set_powerkeydev(struct input_dev *input_device)
 {
 	powerkey_device = input_device;
-
+    
 	return;
 }
 EXPORT_SYMBOL(set_powerkeydev);
@@ -316,41 +297,41 @@ EXPORT_SYMBOL(device_is_suspended);
 static int __init touchwake_control_init(void)
 {
 	int ret;
-
+    
 	touchwake_enabled = false;
 	touch_disabled = false;
 	device_suspended = false;
 	timed_out = true;
 	touchoff_delay = DEF_TOUCHOFF_DELAY;
 	powerkey_flag = 0;
-
+    
 	pr_info("%s misc_register(%s)\n", __func__, touchwake_device.name);
 	ret = misc_register(&touchwake_device);
-
+    
 	if (ret) {
 		pr_err("%s misc_register(%s) fail\n", __func__,
-							touchwake_device.name);
+               touchwake_device.name);
 		return 1;
 	}
-
+    
 	register_early_suspend(&touchwake_suspend_data);
-
+    
 	wake_lock_init(&touchwake_wake_lock, WAKE_LOCK_SUSPEND,
-							"touchwake_wake");
-
+                   "touchwake_wake");
+    
 	if (sysfs_create_group(&touchwake_device.this_device->kobj,
-					&touchwake_notification_group) < 0) {
+                           &touchwake_notification_group) < 0) {
 		pr_err("%s sysfs_create_group fail\n", __func__);
 		pr_err("Failed to create sysfs group for device (%s)!\n",
-							touchwake_device.name);
+               touchwake_device.name);
 	}
-
+    
 	do_gettimeofday(&last_powerkeypress);
-
+    
 	powerkey_flag = 0;
-
+    
 	ret = led_trigger_register(&touchwake_led_trigger);
-
+    
 	return 0;
 }
 

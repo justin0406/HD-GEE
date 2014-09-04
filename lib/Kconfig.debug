@@ -21,16 +21,6 @@ config DEFAULT_MESSAGE_LOGLEVEL
 	  that are auditing their logs closely may want to set it to a lower
 	  priority.
 
-config DEFAULT_CONSOLE_LOGLEVEL
-        int "Default console log level (1-7)"
-        range 1 7
-        default "4"
-        help
-          Default console log level setting for printk statements.
-
-          This was hard-coded to KERN_INFO (7) since at least 2.6.12. You may
-          wish to turn this down to 4 for a quieter console.
-
 config ENABLE_WARN_DEPRECATED
 	bool "Enable __deprecated logic"
 	default y
@@ -188,23 +178,13 @@ config LOCKUP_DETECTOR
 	  The overhead should be minimal.  A periodic hrtimer runs to
 	  generate interrupts and kick the watchdog task every 4 seconds.
 	  An NMI is generated every 10 seconds or so to check for hardlockups.
-	  If NMIs are not available on the platform, every 12 seconds the
-	  hrtimer interrupt on one cpu will be used to check for hardlockups
-	  on the next cpu.
 
 	  The frequency of hrtimer and NMI events and the soft and hard lockup
 	  thresholds can be controlled through the sysctl watchdog_thresh.
 
-config HARDLOCKUP_DETECTOR_NMI
+config HARDLOCKUP_DETECTOR
 	def_bool LOCKUP_DETECTOR && PERF_EVENTS && HAVE_PERF_EVENTS_NMI && \
 		 !HAVE_NMI_WATCHDOG
-
-config HARDLOCKUP_DETECTOR_OTHER_CPU
-	def_bool LOCKUP_DETECTOR && SMP && !HARDLOCKUP_DETECTOR_NMI && \
-		 !HAVE_NMI_WATCHDOG
-
-config HARDLOCKUP_DETECTOR
-	def_bool HARDLOCKUP_DETECTOR_NMI || HARDLOCKUP_DETECTOR_OTHER_CPU
 
 config BOOTPARAM_HARDLOCKUP_PANIC
 	bool "Panic (Reboot) On Hard Lockups"
@@ -310,15 +290,6 @@ config SCHED_DEBUG
 	  If you say Y here, the /proc/sched_debug file will be provided
 	  that can help debug the scheduler. The runtime overhead of this
 	  option is minimal.
-
-config SYSRQ_SCHED_DEBUG
-	bool "Print scheduling debugging info from sysrq-trigger"
-	depends on SCHED_DEBUG
-	default y
-	help
-	  If you say Y here, the "show-task-states(T)" and
-	  "show-blocked-tasks(W)" sysrq-triggers will print additional
-	  scheduling statistics.
 
 config SCHEDSTATS
 	bool "Collect scheduler statistics"
@@ -1324,6 +1295,9 @@ source "samples/Kconfig"
 source "lib/Kconfig.kgdb"
 
 source "lib/Kconfig.kmemcheck"
+
+config TEST_STRING_HELPERS
+	tristate "Test functions located in the string_helpers module at runtime"
 
 config TEST_KSTRTOX
 	tristate "Test kstrto*() family of functions at runtime"

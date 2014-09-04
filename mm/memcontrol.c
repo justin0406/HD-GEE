@@ -1489,26 +1489,17 @@ static int mem_cgroup_count_children(struct mem_cgroup *memcg)
 static u64 mem_cgroup_get_limit(struct mem_cgroup *memcg)
 {
 	u64 limit;
+	u64 memsw;
 
 	limit = res_counter_read_u64(&memcg->res, RES_LIMIT);
+	limit += total_swap_pages << PAGE_SHIFT;
 
+	memsw = res_counter_read_u64(&memcg->memsw, RES_LIMIT);
 	/*
-	 * Do not consider swap space if we cannot swap due to swappiness
+	 * If memsw is finite and limits the amount of swap space available
+	 * to this memcg, return that limit.
 	 */
-	if (mem_cgroup_swappiness(memcg)) {
-		u64 memsw;
-
-		limit += total_swap_pages << PAGE_SHIFT;
-		memsw = res_counter_read_u64(&memcg->memsw, RES_LIMIT);
-
-		/*
-		 * If memsw is finite and limits the amount of swap space
-		 * available to this memcg, return that limit.
-		 */
-		limit = min(limit, memsw);
-	}
-
-	return limit;
+	return min(limit, memsw);
 }
 
 void mem_cgroup_out_of_memory(struct mem_cgroup *memcg, gfp_t gfp_mask,
@@ -2235,7 +2226,7 @@ static void mem_cgroup_drain_pcp_counter(struct mem_cgroup *memcg, int cpu)
 	spin_unlock(&memcg->pcp_counter_lock);
 }
 
-static int __cpuinit memcg_cpu_hotplug_callback(struct notifier_block *nb,
+static int memcg_cpu_hotplug_callback(struct notifier_block *nb,
 					unsigned long action,
 					void *hcpu)
 {
@@ -4421,13 +4412,7 @@ static int compare_thresholds(const void *a, const void *b)
 	const struct mem_cgroup_threshold *_a = a;
 	const struct mem_cgroup_threshold *_b = b;
 
-	if (_a->threshold > _b->threshold)
-		return 1;
-
-	if (_a->threshold < _b->threshold)
-		return -1;
-
-	return 0;
+	return _a->threshold - _b->threshold;
 }
 
 static int mem_cgroup_oom_notify_cb(struct mem_cgroup *memcg)
