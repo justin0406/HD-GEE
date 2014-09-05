@@ -1452,19 +1452,9 @@ void requeue_pi_wake_futex(struct futex_q *q, union futex_key *key,
  * then direct futex_lock_pi_atomic() to force setting the FUTEX_WAITERS bit.
  * hb1 and hb2 must be held by the caller.
  *
-<<<<<<< HEAD
- * Returns:
- *  0 - failed to acquire the lock atomicly
-<<<<<<< HEAD
- *  1 - acquired the lock
-=======
  * Return:
  *  0 - failed to acquire the lock atomically;
  * >0 - acquired the lock, return value is vpid of the top_waiter
->>>>>>> 866293e... futex: Add another early deadlock detection check
-=======
- * >0 - acquired the lock, return value is vpid of the top_waiter
->>>>>>> 3114294... Linux 3.4.75 -> 3.4.95
  * <0 - error
  */
 static int futex_proxy_trylock_atomic(u32 __user *pifutex,
@@ -1661,11 +1651,7 @@ retry_private:
 			 * rereading and handing potential crap to
 			 * lookup_pi_state.
 			 */
-<<<<<<< HEAD
 			ret = lookup_pi_state(ret, hb2, &key2, &pi_state, NULL);
-=======
-			ret = lookup_pi_state(ret, hb2, &key2, &pi_state);
->>>>>>> 3114294... Linux 3.4.75 -> 3.4.95
 		}
 
 		switch (ret) {
