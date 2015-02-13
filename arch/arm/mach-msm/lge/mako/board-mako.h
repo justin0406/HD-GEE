@@ -74,7 +74,9 @@ int __init apq8064_add_sdcc(unsigned int controller,
 int __init apq8064_add_uio(void);
 extern void __init lge_add_sound_devices(void);
 extern void __init lge_add_backlight_devices(void);
+#ifdef CONFIG_BCM2079X
 void __init lge_add_bcm2079x_device(void);
+#endif
 void apq8064_init_mmc(void);
 void apq8064_init_gpiomux(void);
 void apq8064_init_pmic(void);
@@ -117,6 +119,7 @@ void apq8064_init_cam(void);
 #define I2C_SLAVE_ADDR_IMX119				(0x6E)
 #define I2C_SLAVE_ADDR_FLASH				(0xA6 >> 1)
 
+//unsigned char apq8064_mhl_display_enabled(void);
 void apq8064_init_fb(void);
 void apq8064_allocate_fb_region(void);
 void apq8064_mdp_writeback(struct memtype_reserve *reserve_table);
