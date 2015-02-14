@@ -225,11 +225,6 @@ static int __devinit pmic8xxx_pwrkey_probe(struct platform_device *pdev)
 
 	device_init_wakeup(&pdev->dev, pdata->wakeup);
 
-#ifdef CONFIG_TOUCH_WAKE
-	pr_info("powerkey device set\n");
-	set_powerkeydev(pwr);
-#endif
-
 	return 0;
 
 free_press_irq:
