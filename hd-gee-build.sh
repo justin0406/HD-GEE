@@ -15,7 +15,7 @@ DEFCONFIG="gee_defconfig"
 
 # Kernel Details
 BASE_AK_VER="Hells-Doctor"
-VER=".FrAndroid.0205.gee"
+VER=".FrAndroid.0217.gee"
 AK_VER="$BASE_AK_VER$VER"
 
 # AK Variables
