@@ -15,7 +15,7 @@ DEFCONFIG="gee_defconfig"
 
 # Kernel Details
 BASE_AK_VER="Hells-Doctor"
-VER=".FrAndroid.0224.gee"
+VER=".Numeriks.0317.gee"
 AK_VER="$BASE_AK_VER$VER"
 
 # AK Variables
@@ -28,11 +28,11 @@ export KBUILD_BUILD_HOST=BuildBox
 
 # Paths
 KERNEL_DIR=`pwd`
-REPACK_DIR="${HOME}/kernel/HD/HD-GEE-AnyKernel"
-PATCH_DIR="${HOME}/kernel/HD/HD-GEE-AnyKernel/patch"
-MODULES_DIR="${HOME}/kernel/HD/HD-GEE-AnyKernel/patch/modules"
-ZIP_MOVE="${HOME}/kernel/HD/HD-releases/"
-ZIMAGE_DIR="${HOME}/kernel/HD/HD-GEE/arch/arm/boot"
+REPACK_DIR="${HOME}/kernel/HD-GEE-AnyKernel"
+PATCH_DIR="${HOME}/kernel/HD-GEE-AnyKernel/patch"
+MODULES_DIR="${HOME}/kernel/HD-GEE-AnyKernel/patch/modules"
+ZIP_MOVE="${HOME}/kernel/HD-releases/"
+ZIMAGE_DIR="${HOME}/kernel/GEE/arch/arm/boot"
 
 # Functions
 function clean_all {
