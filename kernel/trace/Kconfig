@@ -67,7 +67,6 @@ config FTRACE_NMI_ENTER
 
 config EVENT_TRACING
 	select CONTEXT_SWITCH_TRACER
-	default n
 	bool
 
 config GPU_TRACEPOINTS
