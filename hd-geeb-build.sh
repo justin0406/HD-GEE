@@ -11,11 +11,11 @@ clear
 # Resources
 THREAD="-j$(grep -c ^processor /proc/cpuinfo)"
 KERNEL="zImage"
-DEFCONFIG="gee_defconfig"
+DEFCONFIG="geeb_defconfig"
 
 # Kernel Details
 BASE_AK_VER="Hells-Doctor"
-VER=".Numeriks.0326.gee"
+VER=".Numeriks.0326.geeb"
 AK_VER="$BASE_AK_VER$VER"
 
 # AK Variables
