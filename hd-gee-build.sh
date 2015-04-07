@@ -15,12 +15,12 @@ DEFCONFIG="gee_defconfig"
 
 # Kernel Details
 BASE_AK_VER="Hells-Doctor"
-VER=".Numeriks.0326.gee"
+VER=".Numeriks.0403.gee"
 AK_VER="$BASE_AK_VER$VER"
 
 # AK Variables
 export LOCALVERSION=~`echo $AK_VER`
-export CROSS_COMPILE=${HOME}/kernel/LinaroMod-arm-eabi-4.9/bin/arm-eabi-
+export CROSS_COMPILE=${HOME}/kernel/LinaroMod-arm-eabi-5.0/bin/arm-eabi-
 export ARCH=arm
 export SUBARCH=arm
 export KBUILD_BUILD_USER=Justin
